@@ -165,12 +165,17 @@ Launches a VR teleoperation session. When started, the hostname (`.local`) and l
 | `--robot {axol,sim}` | `axol` uses real hardware; `sim` uses the software visualizer (required) |
 | `--no-left` | Disable the left arm |
 | `--no-right` | Disable the right arm |
-| `--gripper-torque-limit FLOAT` | Max gripper torque in POSITION_FORCE mode in Nm (default: 1.0) |
+| `--left-gripper-torque-limit FLOAT` | Max torque (Nm) for the left gripper in POSITION_FORCE mode (default: 1.0) |
+| `--right-gripper-torque-limit FLOAT` | Max torque (Nm) for the right gripper in POSITION_FORCE mode (default: 1.0) |
+| `--left-stiffness S\|S,S,...` | Compliance↔stiffness blend for the left arm in `[0, 1]`. Scalar or 7 comma-separated values (one per arm joint, in `Joint` enum order). `0` (default) = fully compliant; `1` = pre-tuning industrial gains. See [`AxolConfig.left_stiffness`](#almond_axolrobot). |
+| `--right-stiffness S\|S,S,...` | Same, for the right arm. |
 | `--log-level {DEBUG,INFO,WARNING,ERROR}` | Default: `INFO` |
 
 ```bash
 axol teleop --robot axol
 axol teleop --robot sim --no-right
+axol teleop --robot axol --left-stiffness 0.5 --right-stiffness 0.5
+axol teleop --robot axol --left-stiffness 0.8,0.8,0.5,0.5,0.2,0.2,0.0
 ```
 
 ---
@@ -191,7 +196,10 @@ Records teleoperation episodes using VR controller inputs and three ZED cameras.
 | `--push-to-hub` | Push to HuggingFace Hub when done |
 | `--zed-host IP` | IP address of the ZED camera streamer (default: `192.168.10.1`) |
 | `--zed-iface IFACE` | Network interface to configure for the ZED link (e.g. `eth0`); assigns `192.168.10.2/24`, requires `sudo` |
-| `--gripper-torque-limit FLOAT` | Max gripper torque in POSITION_FORCE mode in Nm (default: 1.0) |
+| `--left-gripper-torque-limit FLOAT` | Max torque (Nm) for the left gripper in POSITION_FORCE mode (default: 1.0) |
+| `--right-gripper-torque-limit FLOAT` | Max torque (Nm) for the right gripper in POSITION_FORCE mode (default: 1.0) |
+| `--left-stiffness S\|S,S,...` | Compliance↔stiffness blend for the left arm in `[0, 1]`. Scalar or 7 comma-separated values (one per arm joint, in `Joint` enum order). `0` (default) = fully compliant; `1` = pre-tuning industrial gains. See [`AxolConfig.left_stiffness`](#almond_axolrobot). |
+| `--right-stiffness S\|S,S,...` | Same, for the right arm. |
 | `--rerun-ip IP` | IP of a Rerun viewer on your local machine for live visualization |
 | `--rerun-port INT` | Rerun viewer port (default: 9876); only used when `--rerun-ip` is set |
 | `--log-level {DEBUG,INFO,WARNING,ERROR}` | Default: `INFO` |
@@ -199,6 +207,7 @@ Records teleoperation episodes using VR controller inputs and three ZED cameras.
 ```bash
 axol collect-data --repo-id myorg/pick-place --task "Pick the red cube and place it in the bin"
 axol collect-data --repo-id myorg/pick-place --task "Pick the red cube" --fps 30 --zed-iface eth0
+axol collect-data --repo-id myorg/pick-place --task "Pick the red cube" --left-stiffness 0.5 --right-stiffness 0.5
 ```
 
 **VR controller events:**
@@ -209,7 +218,9 @@ axol collect-data --repo-id myorg/pick-place --task "Pick the red cube" --fps 30
 | `TERMINATE_EPISODE` | Save the episode; headset enters `Saving` state until write completes |
 | `RERECORD_EPISODE` | Discard and retry |
 
-After each episode the robot automatically returns to its rest pose before the next take begins. If an existing dataset is found at `--root`, collection resumes from where it left off.
+After each episode the robot automatically returns to its rest pose before the next take begins. If an existing dataset is found at `--root`, collection resumes from where it left off; conversely, if no episodes were saved before exit the empty dataset directory is removed on shutdown so an aborted session does not leave a half-initialized dataset on disk.
+
+Dataset frame capture runs on a dedicated thread decoupled from the teleop control loop. Teleop ticks at `--teleop-hz` and only ever touches joint state; the capture thread ticks at `--fps`, blocks on `ZedCamera.read_at_or_after(T_n)` per camera so every recorded frame is sender-clock-aligned with the joint sample taken at `T_n`, and writes the dataset row. This keeps camera reads, image conversion, and `dataset.add_frame()` off the hot control loop, and produces datasets whose camera/joint pairing matches the sender's exposure timeline rather than the receiver's decode timeline. Both clocks must agree — make sure [`zed.sync-clocks`](#zedsync-clocks--time-synchronization) is running on both machines.
 
 ---
 
@@ -230,7 +241,7 @@ Runs a trained policy autonomously on the robot using three ZED cameras. Between
 | `--push-to-hub` | Push rollout dataset to HuggingFace Hub when done |
 | `--zed-host IP` | IP address of the ZED camera streamer (default: `192.168.10.1`) |
 | `--zed-iface IFACE` | Network interface to configure for the ZED link (e.g. `eth0`); assigns `192.168.10.2/24`, requires `sudo` |
-| `--gripper-torque-limit FLOAT` | Max gripper torque in POSITION_FORCE mode in Nm (default: 1.0) |
+| `--gripper-torque-limit FLOAT` | Max gripper torque (Nm) in POSITION_FORCE mode, applied to both grippers (default: 1.0) |
 | `--rerun-ip IP` | IP of a Rerun viewer on your local machine for live visualization |
 | `--rerun-port INT` | Rerun viewer port (default: 9876); only used when `--rerun-ip` is set |
 | `--device STR` | PyTorch device for inference (default: `cuda`) |
@@ -254,7 +265,7 @@ Streams ZED-X One cameras over the local network using HEVC encoding. At least o
 | `--overhead SERIAL` | Serial number of the overhead camera |
 | `--left-arm SERIAL` | Serial number of the left-arm camera |
 | `--right-arm SERIAL` | Serial number of the right-arm camera |
-| `--resolution {HD1080,HD1200,SVGA}` | Default: `HD1080` |
+| `--resolution {HD1080,HD1200,SVGA}` | Default: `SVGA` |
 | `--fps FPS` | Default: 60 |
 | `--bitrate KBPS` | HEVC bitrate in kbit/s (default: 8000) |
 | `--setup-ip IFACE` | Assign sender IP to a network interface before streaming (e.g. `eth0`); requires `sudo` |
@@ -272,6 +283,33 @@ Downloads and installs the `pyzed` Python wheel matching the installed ZED SDK v
 ```bash
 axol zed.install
 ```
+
+### `zed.sync-clocks` — Time synchronization
+
+The Jetson sender and the upper-computer receiver run independent system clocks. The ZED SDK stamps every frame with the sender's `CLOCK_REALTIME` via `TIME_REFERENCE.IMAGE`; the receiver then converts that timestamp onto its own `perf_counter` so dataset rows record the moment of *capture*, not the moment of decode. None of that produces aligned data unless both machines agree on what time it is.
+
+`axol zed.sync-clocks` runs a PTP (Precision Time Protocol) daemon over the direct ethernet link, holding the two clocks to sub-millisecond agreement — well below one camera frame period at 60 fps. The startup pipeline-latency check in `ZedCamera.connect()` warns loudly if the mean `receive_perf - capture_perf` falls outside `[0, 200] ms`, which is the operator-visible "PTP isn't running" canary.
+
+| Flag | Description |
+|---|---|
+| `--role {master,slave}` | `master` on the long-lived upper computer (owns the dataset); `slave` on the Jetson sender |
+| `--iface IFACE` | Network interface carrying the direct link (e.g. `eth0`) |
+| `--transport {l2,udpv4}` | `l2` (raw ethernet, default) or `udpv4` |
+| `--timestamping {auto,hardware,software}` | `auto` (default) probes `ethtool -T` and prefers hardware |
+| `--log-level {DEBUG,INFO,WARNING,ERROR}` | Default: `INFO` |
+
+Two-terminal recipe (one per machine, both stay running for the whole session):
+
+```bash
+axol zed.sync-clocks --role master --iface eth0   # upper computer
+axol zed.sync-clocks --role slave  --iface eth0   # Jetson
+```
+
+The privileged subprocesses (`ptp4l`, `phc2sys`, and the apt-get auto-install fallback) are escalated inline via `sudo`, so you do **not** run `axol` itself as root. Sudo will prompt for a password the first time and reuse cached credentials for the rest of the session. The command depends on the `linuxptp` package (`ptp4l` + `phc2sys`) and, for hardware-timestamping detection, `ethtool`; on Debian/Ubuntu these are auto-installed if missing. On non-apt systems install them manually (`linuxptp`, `ethtool`) and rerun.
+
+Hardware timestamping is detected via `ethtool -T` and used automatically when both NICs expose a PTP Hardware Clock. If only software timestamping is available the daemon still runs but expect ~10–100 µs extra jitter, which is still well under one frame period.
+
+If you cannot install `linuxptp` for some reason, `chronyd` over the same direct link is a serviceable fallback — accuracy is worse (milliseconds rather than microseconds), so the DEBUG capture-skew logs will show wider spreads, but data will still align well enough for training.
 
 ---
 
@@ -323,6 +361,26 @@ axol tune.friction --r --joint elbow --kp 20 --kd 0.6
 axol tune.friction --l --joint wrist_1 --velocities 0.2 0.6 1.0
 axol tune.friction --l --joint shoulder_2 --dump-csv
 ```
+
+### `tune.repeatability`
+
+Drives both arms between the rest pose and a hard-coded crossed-arms tips-touching pose, planning each leg with pyroki + the URDF so the arms can't clip the torso during the long arc. The gripper is held closed throughout and the arms run at maximum stiffness (the pre-tuning industrial gains) — repeatability is meaningless under the compliant teleop gains. Useful for measuring how reliably the grippers return to the same physical contact point after many motions.
+
+| Flag | Description |
+|---|---|
+| `--cycles INT` | Number of touch-and-return cycles; `0` (default) = run until Ctrl-C |
+| `--gripper-torque-limit FLOAT` | Gripper closing torque limit in Nm (default: 0.3); kept low so the tips collide gently |
+| `--dwell FLOAT` | Seconds to hold each end of the cycle (default: 0.5) |
+| `--rate FLOAT` | Control loop rate in Hz (default: 100) |
+| `--no-left` / `--no-right` | Disable an arm (the disabled side stays at rest while the other still moves) |
+| `--log-level {DEBUG,INFO,WARNING,ERROR}` | Default: `INFO` |
+
+```bash
+axol tune.repeatability               # forever
+axol tune.repeatability --cycles 5    # five touch-and-return cycles
+```
+
+The touching pose is hand-posed and lives at the top of `almond_axol/cli/tune/repeatability.py` — edit `_TOUCH_LEFT` / `_TOUCH_RIGHT` in place to re-calibrate the contact point.
 
 ### `gravity-comp`
 
@@ -560,11 +618,15 @@ Gravity feedforward is computed centrally from the URDF — see [Gravity compens
 | Field | Default | Description |
 |---|---|---|
 | `max_step_rad` | `0.5` | Maximum allowed change in any arm joint (rad) between consecutive `motion_control` calls. Commands that exceed this are dropped and a warning is logged. Set to `float("inf")` to disable. At 30 Hz, 0.5 rad/step ≈ 15 rad/s — roughly 2.5× the teleop velocity ceiling. |
-| `stiffness` | `0.0` | Compliance ↔ stiffness blend in `[0, 1]`. `0` keeps the per-joint compliant gains; `1` restores the pre-tuning industrial gains in `_STIFF_GAINS` (e.g. `shoulder_1` → `kp=500`). `kp` / `kd` interpolate geometrically (log-space — matches perceived stiffness); `j_eff` / `kd_soft` scale linearly to 0 at `s=1`. |
+| `left_stiffness` | `0.0` | Compliance ↔ stiffness blend for the **left** arm. Either a scalar in `[0, 1]` (applied to every joint) or a 7-tuple of per-joint factors (order: `shoulder_1`, `shoulder_2`, `shoulder_3`, `elbow`, `wrist_1`, `wrist_2`, `wrist_3` — gripper excluded). `0` keeps the per-joint compliant gains; `1` restores the pre-tuning industrial gains in `_STIFF_GAINS` (e.g. `shoulder_1` → `kp=500`). `kp` / `kd` interpolate geometrically (log-space — matches perceived stiffness); `j_eff` / `kd_soft` scale linearly to 0 at `s=1`. |
+| `right_stiffness` | `0.0` | Same, for the **right** arm. |
 
 ```python
-config = AxolConfig(stiffness=1.0)   # stiff industrial feel
-config = AxolConfig(stiffness=0.5)   # geometric mean: shoulder_1 kp ≈ 141
+config = AxolConfig(left_stiffness=1.0, right_stiffness=1.0)   # both arms, stiff industrial feel
+config = AxolConfig(left_stiffness=0.5, right_stiffness=0.5)   # geometric mean: shoulder_1 kp ≈ 141
+config = AxolConfig(                                           # per-joint, left only
+    left_stiffness=(0.8, 0.8, 0.5, 0.5, 0.2, 0.2, 0.0),
+)
 ```
 
 Both arms share the same `ArmConfig` defaults for gains and masses; the right arm gets CoMs mirrored across X via `ArmConfig.mirror_to_right()`. Per-motor friction values are identified separately for each arm (left/right motors measurably differ) — see `_LEFT_FRICTION` / `_RIGHT_FRICTION` in `almond_axol/robot/config.py`. Pass an explicit `left=` / `right=` to override either side.
@@ -790,7 +852,7 @@ asyncio.run(main())
 | `overhead_port` | `30000` | Streaming port for the overhead camera |
 | `left_arm_port` | `30002` | Streaming port for the left-arm camera |
 | `right_arm_port` | `30004` | Streaming port for the right-arm camera |
-| `resolution` | `HD1080` | `sl.RESOLUTION`: `HD1200`, `HD1080`, or `SVGA` |
+| `resolution` | `SVGA` | `sl.RESOLUTION`: `HD1200`, `HD1080`, or `SVGA` |
 | `fps` | `60` | Capture frame rate for all cameras |
 | `bitrate` | `8000` kbps | HEVC encoding bitrate |
 
@@ -976,6 +1038,14 @@ cam.connect()
 frame = cam.read_latest()   # shape (H, W, 3), non-blocking, returns most recent frame
 cam.disconnect()
 ```
+
+Each grabbed frame carries two timestamps on the receiver's `perf_counter` clock: `capture_perf_ts` (when the *sender* exposed the frame, derived from `TIME_REFERENCE.IMAGE`) and `receive_perf_ts` (when this process decoded it). Cross-clock alignment requires PTP — see [`zed.sync-clocks`](#zedsync-clocks--time-synchronization). The receive-vs-capture skew is sampled on `connect()` and a warning is logged if the mean falls outside `[0, 200] ms`.
+
+| Method | Description |
+|---|---|
+| `read_latest(max_age_ms=500)` | Most recent frame, non-blocking; raises `TimeoutError` if it is older than `max_age_ms`. |
+| `read_latest_with_ts()` | `(frame, capture_perf_ts, receive_perf_ts)` for the most recent frame. |
+| `read_at_or_after(target_capture_perf_ts, timeout_ms=500)` | Block until a frame with `capture_perf_ts >= target` is available. Used by `collect-data` to align every camera and the joint sample on the same sender-side timeline. |
 
 **`ZedCameraConfig` fields**
 
