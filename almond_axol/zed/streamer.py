@@ -88,11 +88,34 @@ class ZedStreamer:
             if serial is not None
         ]
 
+        devices = sl.CameraOne.get_device_list()
+        serial_to_id: dict[int, int] = {
+            int(d.serial_number): int(d.id) for d in devices
+        }
+        _logger.info(
+            "Detected %d ZED-X One camera(s): %s",
+            len(devices),
+            ", ".join(f"serial={int(d.serial_number)} id={int(d.id)}" for d in devices)
+            or "<none>",
+        )
+
+        resolved_specs: list[tuple[str, int, int, int]] = []
+        for name, serial, port in specs:
+            camera_id = serial_to_id.get(int(serial))
+            if camera_id is None:
+                _logger.error(
+                    "Requested %s serial %d not found in device list; skipping.",
+                    name,
+                    serial,
+                )
+                continue
+            resolved_specs.append((name, serial, camera_id, port))
+
         loop = asyncio.get_running_loop()
         states: list[_CameraState | None] = []
-        for name, serial, port in specs:
+        for name, serial, camera_id, port in resolved_specs:
             state = await loop.run_in_executor(
-                None, self._open_camera, name, serial, port
+                None, self._open_camera, name, serial, camera_id, port
             )
             states.append(state)
 
@@ -128,17 +151,25 @@ class ZedStreamer:
     # Internal (runs in thread-pool executor)
     # ------------------------------------------------------------------
 
-    def _open_camera(self, name: str, serial: int, port: int) -> _CameraState | None:
+    def _open_camera(
+        self, name: str, serial: int, camera_id: int, port: int
+    ) -> _CameraState | None:
         zed = sl.CameraOne()
 
         init_params = sl.InitParametersOne()
         init_params.camera_resolution = self._config.resolution
         init_params.camera_fps = self._config.fps
-        init_params.input.set_from_serial_number(serial)
+        init_params.input.set_from_camera_id(camera_id)
 
         err = zed.open(init_params)
         if err != sl.ERROR_CODE.SUCCESS:
-            _logger.error("Failed to open %s (serial %d): %s", name, serial, err)
+            _logger.error(
+                "Failed to open %s (serial %d, camera_id %d): %s",
+                name,
+                serial,
+                camera_id,
+                err,
+            )
             return None
 
         stream_params = sl.StreamingParameters()
@@ -170,9 +201,10 @@ class ZedStreamer:
         state.thread = thread
 
         _logger.info(
-            "Streaming %s (serial %d) on port %d at %s %dfps %dkbps",
+            "Streaming %s (serial %d, camera_id %d) on port %d at %s %dfps %dkbps",
             name,
             serial,
+            camera_id,
             port,
             self._config.resolution,
             self._config.fps,
