@@ -262,35 +262,36 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[
     p.add_argument(
         "--left-gripper-torque-limit",
         type=float,
-        default=1.0,
-        help="Max output torque (Nm) for the left gripper in POSITION_FORCE mode (default: 1.0).",
+        default=0.5,
+        help="Max output torque (Nm) for the left gripper in POSITION_FORCE mode (default: 0.5).",
     )
     p.add_argument(
         "--right-gripper-torque-limit",
         type=float,
-        default=1.0,
-        help="Max output torque (Nm) for the right gripper in POSITION_FORCE mode (default: 1.0).",
+        default=0.5,
+        help="Max output torque (Nm) for the right gripper in POSITION_FORCE mode (default: 0.5).",
     )
     stiffness_help = (
         "Compliance ↔ stiffness blend in [0, 1] for the {side} arm. "
         f"Either a single value applied to all {len(ARM_JOINTS)} joints, "
         f"or {len(ARM_JOINTS)} comma-separated values (one per joint, in "
         f"order: {', '.join(j.value for j in ARM_JOINTS)}; gripper "
-        "excluded). 0 (default) is fully compliant; 1 restores the "
-        "pre-tuning industrial gains. See AxolConfig.{attr}."
+        "excluded). 0 is fully compliant; 1 restores the pre-tuning "
+        "industrial gains; 0.5 (default) is the geometric mean. See "
+        "AxolConfig.{attr}."
     )
     stiffness_metavar = "S|" + ",".join("S" for _ in ARM_JOINTS)
     p.add_argument(
         "--left-stiffness",
         type=parse_stiffness,
-        default=0.0,
+        default=0.5,
         metavar=stiffness_metavar,
         help=stiffness_help.format(side="left", attr="left_stiffness"),
     )
     p.add_argument(
         "--right-stiffness",
         type=parse_stiffness,
-        default=0.0,
+        default=0.5,
         metavar=stiffness_metavar,
         help=stiffness_help.format(side="right", attr="right_stiffness"),
     )
@@ -347,10 +348,10 @@ def _run(
     push_to_hub: bool = False,
     zed_host: str = "192.168.10.1",
     zed_iface: str | None = None,
-    left_gripper_torque_limit: float = 1.0,
-    right_gripper_torque_limit: float = 1.0,
-    left_stiffness: float | tuple[float, ...] = 0.0,
-    right_stiffness: float | tuple[float, ...] = 0.0,
+    left_gripper_torque_limit: float = 0.5,
+    right_gripper_torque_limit: float = 0.5,
+    left_stiffness: float | tuple[float, ...] = 0.5,
+    right_stiffness: float | tuple[float, ...] = 0.5,
     rerun_ip: str | None = None,
     rerun_port: int = 9876,
 ) -> None:

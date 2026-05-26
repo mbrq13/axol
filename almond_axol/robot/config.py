@@ -197,7 +197,7 @@ class ArmConfig:
         )
     )
     gripper: PositionForceConfig = field(
-        default_factory=lambda: PositionForceConfig(torque_limit=1.0, max_speed=10.0)
+        default_factory=lambda: PositionForceConfig(torque_limit=0.5, max_speed=10.0)
     )
 
     def mirror_to_right(self) -> "ArmConfig":
@@ -408,16 +408,16 @@ class AxolConfig:
                          in ``[0, 1]``. Either a scalar (applied to every
                          joint) or 7 values in
                          :data:`almond_axol.shared.ARM_JOINTS` order
-                         (gripper excluded). ``0`` (default) keeps the
-                         per-joint compliant gains; ``1`` restores the
-                         pre-tuning industrial gains in
-                         :data:`_STIFF_GAINS`. ``kp`` / ``kd`` interpolate
-                         geometrically (log-space); ``j_eff`` /
-                         ``kd_soft`` scale linearly to 0 at ``s=1``. The
-                         blend is baked into ``left`` at construction —
-                         mutating ``left_stiffness`` afterwards has no
-                         effect, and ``replace()`` would re-apply it
-                         (don't).
+                         (gripper excluded). ``0`` keeps the per-joint
+                         compliant gains; ``1`` restores the pre-tuning
+                         industrial gains in :data:`_STIFF_GAINS`;
+                         ``0.5`` (default) is the geometric mean of the
+                         two. ``kp`` / ``kd`` interpolate geometrically
+                         (log-space); ``j_eff`` / ``kd_soft`` scale
+                         linearly to 0 at ``s=1``. The blend is baked
+                         into ``left`` at construction — mutating
+                         ``left_stiffness`` afterwards has no effect,
+                         and ``replace()`` would re-apply it (don't).
         right_stiffness: Same, for the **right** arm.
     """
 
@@ -428,8 +428,8 @@ class AxolConfig:
         default_factory=lambda: _build_arm(_RIGHT_FRICTION, is_left=False)
     )
     max_step_rad: float = 0.5
-    left_stiffness: float | Sequence[float] = 0.0
-    right_stiffness: float | Sequence[float] = 0.0
+    left_stiffness: float | Sequence[float] = 0.5
+    right_stiffness: float | Sequence[float] = 0.5
 
     def __post_init__(self) -> None:
         self.left = _apply_stiffness(self.left, self.left_stiffness)

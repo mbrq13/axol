@@ -165,16 +165,16 @@ Launches a VR teleoperation session. When started, the hostname (`.local`) and l
 | `--robot {axol,sim}` | `axol` uses real hardware; `sim` uses the software visualizer (required) |
 | `--no-left` | Disable the left arm |
 | `--no-right` | Disable the right arm |
-| `--left-gripper-torque-limit FLOAT` | Max torque (Nm) for the left gripper in POSITION_FORCE mode (default: 1.0) |
-| `--right-gripper-torque-limit FLOAT` | Max torque (Nm) for the right gripper in POSITION_FORCE mode (default: 1.0) |
-| `--left-stiffness S\|S,S,...` | Compliance↔stiffness blend for the left arm in `[0, 1]`. Scalar or 7 comma-separated values (one per arm joint, in `Joint` enum order). `0` (default) = fully compliant; `1` = pre-tuning industrial gains. See [`AxolConfig.left_stiffness`](#almond_axolrobot). |
+| `--left-gripper-torque-limit FLOAT` | Max torque (Nm) for the left gripper in POSITION_FORCE mode (default: 0.5) |
+| `--right-gripper-torque-limit FLOAT` | Max torque (Nm) for the right gripper in POSITION_FORCE mode (default: 0.5) |
+| `--left-stiffness S\|S,S,...` | Compliance↔stiffness blend for the left arm in `[0, 1]`. Scalar or 7 comma-separated values (one per arm joint, in `Joint` enum order). `0` = fully compliant; `1` = pre-tuning industrial gains; `0.5` (default) is the geometric mean. See [`AxolConfig.left_stiffness`](#almond_axolrobot). |
 | `--right-stiffness S\|S,S,...` | Same, for the right arm. |
 | `--log-level {DEBUG,INFO,WARNING,ERROR}` | Default: `INFO` |
 
 ```bash
 axol teleop --robot axol
 axol teleop --robot sim --no-right
-axol teleop --robot axol --left-stiffness 0.5 --right-stiffness 0.5
+axol teleop --robot axol --left-stiffness 1.0 --right-stiffness 1.0
 axol teleop --robot axol --left-stiffness 0.8,0.8,0.5,0.5,0.2,0.2,0.0
 ```
 
@@ -196,9 +196,9 @@ Records teleoperation episodes using VR controller inputs and three ZED cameras.
 | `--push-to-hub` | Push to HuggingFace Hub when done |
 | `--zed-host IP` | IP address of the ZED camera streamer (default: `192.168.10.1`) |
 | `--zed-iface IFACE` | Network interface to configure for the ZED link (e.g. `eth0`); assigns `192.168.10.2/24`, requires `sudo` |
-| `--left-gripper-torque-limit FLOAT` | Max torque (Nm) for the left gripper in POSITION_FORCE mode (default: 1.0) |
-| `--right-gripper-torque-limit FLOAT` | Max torque (Nm) for the right gripper in POSITION_FORCE mode (default: 1.0) |
-| `--left-stiffness S\|S,S,...` | Compliance↔stiffness blend for the left arm in `[0, 1]`. Scalar or 7 comma-separated values (one per arm joint, in `Joint` enum order). `0` (default) = fully compliant; `1` = pre-tuning industrial gains. See [`AxolConfig.left_stiffness`](#almond_axolrobot). |
+| `--left-gripper-torque-limit FLOAT` | Max torque (Nm) for the left gripper in POSITION_FORCE mode (default: 0.5) |
+| `--right-gripper-torque-limit FLOAT` | Max torque (Nm) for the right gripper in POSITION_FORCE mode (default: 0.5) |
+| `--left-stiffness S\|S,S,...` | Compliance↔stiffness blend for the left arm in `[0, 1]`. Scalar or 7 comma-separated values (one per arm joint, in `Joint` enum order). `0` = fully compliant; `1` = pre-tuning industrial gains; `0.5` (default) is the geometric mean. See [`AxolConfig.left_stiffness`](#almond_axolrobot). |
 | `--right-stiffness S\|S,S,...` | Same, for the right arm. |
 | `--rerun-ip IP` | IP of a Rerun viewer on your local machine for live visualization |
 | `--rerun-port INT` | Rerun viewer port (default: 9876); only used when `--rerun-ip` is set |
@@ -207,7 +207,7 @@ Records teleoperation episodes using VR controller inputs and three ZED cameras.
 ```bash
 axol collect-data --repo-id myorg/pick-place --task "Pick the red cube and place it in the bin"
 axol collect-data --repo-id myorg/pick-place --task "Pick the red cube" --fps 30 --zed-iface eth0
-axol collect-data --repo-id myorg/pick-place --task "Pick the red cube" --left-stiffness 0.5 --right-stiffness 0.5
+axol collect-data --repo-id myorg/pick-place --task "Pick the red cube" --left-stiffness 1.0 --right-stiffness 1.0
 ```
 
 **VR controller events:**
@@ -248,9 +248,9 @@ Runs a trained policy autonomously on the robot using three ZED cameras and LeRo
 | `--temporal-ensemble-coeff K` | Decay coefficient for `temporal_ensemble` (default: 0.01, ACT paper). `wᵢ = exp(-K·i)`, `i=0` oldest chunk; `K>0` smoother, `K=0` uniform, `K<0` more reactive |
 | `--zed-host IP` | IP address of the ZED camera streamer (default: `192.168.10.1`) |
 | `--zed-iface IFACE` | Network interface to configure for the ZED link (e.g. `eth0`); assigns `192.168.10.2/24`, requires `sudo` |
-| `--left-gripper-torque-limit FLOAT` | Max torque (Nm) for the left gripper in POSITION_FORCE mode (default: 1.0) |
-| `--right-gripper-torque-limit FLOAT` | Max torque (Nm) for the right gripper in POSITION_FORCE mode (default: 1.0) |
-| `--left-stiffness S\|S,S,...` | Compliance↔stiffness blend for the left arm in `[0, 1]`. Scalar or 7 comma-separated values (one per arm joint, in `Joint` enum order). `0` (default) = fully compliant; `1` = pre-tuning industrial gains. Should match the value used at data collection time. See [`AxolConfig.left_stiffness`](#almond_axolrobot). |
+| `--left-gripper-torque-limit FLOAT` | Max torque (Nm) for the left gripper in POSITION_FORCE mode (default: 0.5) |
+| `--right-gripper-torque-limit FLOAT` | Max torque (Nm) for the right gripper in POSITION_FORCE mode (default: 0.5) |
+| `--left-stiffness S\|S,S,...` | Compliance↔stiffness blend for the left arm in `[0, 1]`. Scalar or 7 comma-separated values (one per arm joint, in `Joint` enum order). `0` = fully compliant; `1` = pre-tuning industrial gains; `0.5` (default) is the geometric mean. Should match the value used at data collection time. See [`AxolConfig.left_stiffness`](#almond_axolrobot). |
 | `--right-stiffness S\|S,S,...` | Same, for the right arm. |
 | `--rerun-ip IP` | IP of a Rerun viewer on your local machine for live visualization |
 | `--rerun-port INT` | Rerun viewer port (default: 9876); only used when `--rerun-ip` is set |
@@ -260,7 +260,7 @@ Runs a trained policy autonomously on the robot using three ZED cameras and LeRo
 axol run-policy --policy myorg/pick-place-policy --policy-type act --task "Pick the red cube"
 axol run-policy --policy ./checkpoints/epoch_100 --policy-type smolvla --task "Stack blocks" --device cpu
 axol run-policy --policy myorg/pick-place-policy --policy-type act --task "Pick the red cube" \
-    --repo-id myorg/pick-place-rollouts --left-stiffness 0.5 --right-stiffness 0.5
+    --repo-id myorg/pick-place-rollouts --left-stiffness 1.0 --right-stiffness 1.0
 ```
 
 If `--repo-id` is supplied, each saved episode is appended to a LeRobot-format dataset using the same resume/refuse/wipe semantics as `collect-data` (resume a complete dataset, refuse an incomplete one, wipe a leftover empty directory). Between episodes the arms return to the rest pose via a collision-aware IK trajectory planned in a worker subprocess, mirroring the reset path used by `collect-data`.
@@ -633,8 +633,8 @@ Gravity feedforward is computed centrally from the URDF — see [Gravity compens
 | Field | Default | Description |
 |---|---|---|
 | `max_step_rad` | `0.5` | Maximum allowed change in any arm joint (rad) between consecutive `motion_control` calls. Commands that exceed this are dropped and a warning is logged. Set to `float("inf")` to disable. At 30 Hz, 0.5 rad/step ≈ 15 rad/s — roughly 2.5× the teleop velocity ceiling. |
-| `left_stiffness` | `0.0` | Compliance ↔ stiffness blend for the **left** arm. Either a scalar in `[0, 1]` (applied to every joint) or a 7-tuple of per-joint factors (order: `shoulder_1`, `shoulder_2`, `shoulder_3`, `elbow`, `wrist_1`, `wrist_2`, `wrist_3` — gripper excluded). `0` keeps the per-joint compliant gains; `1` restores the pre-tuning industrial gains in `_STIFF_GAINS` (e.g. `shoulder_1` → `kp=500`). `kp` / `kd` interpolate geometrically (log-space — matches perceived stiffness); `j_eff` / `kd_soft` scale linearly to 0 at `s=1`. |
-| `right_stiffness` | `0.0` | Same, for the **right** arm. |
+| `left_stiffness` | `0.5` | Compliance ↔ stiffness blend for the **left** arm. Either a scalar in `[0, 1]` (applied to every joint) or a 7-tuple of per-joint factors (order: `shoulder_1`, `shoulder_2`, `shoulder_3`, `elbow`, `wrist_1`, `wrist_2`, `wrist_3` — gripper excluded). `0` keeps the per-joint compliant gains; `1` restores the pre-tuning industrial gains in `_STIFF_GAINS` (e.g. `shoulder_1` → `kp=500`); the default `0.5` is the geometric mean (e.g. `shoulder_1` `kp` ≈ 141). `kp` / `kd` interpolate geometrically (log-space — matches perceived stiffness); `j_eff` / `kd_soft` scale linearly to 0 at `s=1`. |
+| `right_stiffness` | `0.5` | Same, for the **right** arm. |
 
 ```python
 config = AxolConfig(left_stiffness=1.0, right_stiffness=1.0)   # both arms, stiff industrial feel
