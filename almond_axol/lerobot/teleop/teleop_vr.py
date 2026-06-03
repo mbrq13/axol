@@ -125,7 +125,7 @@ class AxolVRTeleop(Teleoperator):
         self._prev_reset: bool = False
         self._reset_latched: bool = False
 
-        # Deadman toggle (mirrors native VRTeleop behaviour):
+        # Engage toggle (mirrors native VRTeleop behaviour):
         #   both grips rising edge → enable, either grip rising edge → disable
         self._teleop_enabled: bool = False
         self._prev_both: bool = False
@@ -541,7 +541,7 @@ class AxolVRTeleop(Teleoperator):
 
             last_frame = frame
 
-            # Deadman toggle — mirrors native VRTeleop._ik_loop logic:
+            # Engage toggle — mirrors native VRTeleop._ik_loop logic:
             #   rising edge of BOTH grips pressed together → enable tracking
             #   rising edge of EITHER grip pressed alone   → disable tracking
             both = frame.l_lock and frame.r_lock
@@ -564,7 +564,7 @@ class AxolVRTeleop(Teleoperator):
             self._prev_either = either
 
             # Only track gripper position when arm movement is also enabled so
-            # that the gripper cannot be actuated independently of the deadman.
+            # that the gripper cannot be actuated independently of the toggle.
             if self._teleop_enabled:
                 self._l_grip = frame.l_grip
                 self._r_grip = frame.r_grip

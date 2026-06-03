@@ -38,13 +38,13 @@ class VRTeleopConfig:
             reset trajectory generation.
         reset_max_iterations: Maximum solver iterations per reset waypoint.
         engage_max_vel: Maximum joint velocity (rad/s) used by the
-            trapezoidal filter when the deadman switch is first pressed after a
+            trapezoidal filter when teleop is first engaged after a
             rest-pose trajectory (startup or reset).  Slows the transition from
             rest pose to the first IK target.  Restored to ``teleop_max_vel``
             after ``engage_duration`` seconds.  Defaults to
             ``reset_speed`` for a consistent feel.
         engage_duration: Seconds to hold ``engage_max_vel`` after the
-            post-rest deadman rising edge before restoring ``teleop_max_vel``.
+            post-rest engage rising edge before restoring ``teleop_max_vel``.
         teleop_max_vel: Maximum joint velocity (rad/s) enforced by the
             trapezoidal filter during normal teleoperation.  Limits how fast
             any single joint can move toward a new IK target.  Defaults to

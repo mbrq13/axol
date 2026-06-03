@@ -213,14 +213,14 @@ class IKWorker:
 
     def step(self, frame: VRFrame, q_current: np.ndarray) -> np.ndarray:
         """Process one VRFrame. Returns updated full (N,) q in radians."""
-        deadman = frame.l_lock and frame.r_lock
-        if not deadman:
+        enabled = frame.l_lock and frame.r_lock
+        if not enabled:
             self._active = False
             return q_current
 
         if not self._active:
             # OneEuroFilter ``_x_prev`` froze at the controller pose held when
-            # the deadman was last released; reset so the engage-snap uses the
+            # the toggle was last disabled; reset so the engage-snap uses the
             # actual current pose instead of biasing toward stale state and
             # sweeping the IK target as the filter catches up.
             self._reset_pose_filters()
@@ -339,9 +339,9 @@ class IKWorker:
         )
 
     def reset(self) -> None:
-        """Deactivate the deadman-switch state and clear snap poses and filter state.
+        """Deactivate the engage-toggle state and clear snap poses and filter state.
 
-        Call this before replaying a reset trajectory so the next deadman press
+        Call this before replaying a reset trajectory so the next engage
         performs a fresh engage-snap from the current IK pose.
         """
         self._active = False
@@ -419,7 +419,7 @@ class IKWorker:
         right_e: np.ndarray,
         q_current: np.ndarray,
     ) -> None:
-        """Snapshot controller and FK poses at deadman engage.
+        """Snapshot controller and FK poses at toggle engage.
 
         These snapshots become the origin against which subsequent controller
         motion is measured to build relative EE and elbow targets in :meth:`step`.

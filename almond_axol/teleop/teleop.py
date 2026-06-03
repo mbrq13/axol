@@ -475,7 +475,7 @@ class VRTeleop:
             self._prev_either = either
 
             # Only track gripper position when arm movement is also enabled so
-            # that the gripper cannot be actuated independently of the deadman.
+            # that the gripper cannot be actuated independently of the toggle.
             if self._teleop_enabled:
                 self._l_grip = frame.l_grip
                 self._r_grip = frame.r_grip
