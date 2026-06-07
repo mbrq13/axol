@@ -37,6 +37,17 @@ _MAX_MEAN = 254.0
 _DAEMON_RESTART_WAIT_S = 5.0
 # How long to keep capturing and validating frames.
 _CAPTURE_DURATION_S = 5.0
+# Minimum fraction of the expected fps * duration frames we tolerate before
+# treating the capture as a dropped-frame failure. Per-frame validation (full
+# std/mean scans) costs enough that even a healthy link only sustains ~24 of the
+# nominal 30fps, so leave headroom below that and still catch a serious drop.
+_MIN_FRAME_FRACTION = 0.6
+# A flaky GMSL link drops frames in bursts. Too many grab() failures in a row
+# points at a marginal cable even if the overall count looks acceptable.
+_MAX_CONSECUTIVE_GRAB_FAILURES = 5
+# A stuck link can keep handing back the same buffer. Allow this many repeats of
+# a frame back-to-back before declaring the stream frozen rather than live.
+_MAX_DUPLICATE_FRAMES = 3
 
 
 class CableTestError(RuntimeError):
@@ -63,11 +74,12 @@ def _restart_zed_daemon() -> None:
     time.sleep(_DAEMON_RESTART_WAIT_S)
 
 
-def _validate_frame(bgr: np.ndarray) -> None:
+def _validate_frame(bgr: np.ndarray, expected_width: int, expected_height: int) -> None:
     """Raise :class:`CableTestError` unless ``bgr`` looks like a real frame.
 
-    Checks shape, dtype, that the image is not empty, and that it carries actual
-    image content (non-trivial variation and a plausible brightness level).
+    Checks shape, dtype, that the image is not empty, that its resolution matches
+    the camera's reported configuration, and that it carries actual image content
+    (non-trivial variation and a plausible brightness level).
     """
     if bgr is None or bgr.size == 0:
         raise CableTestError("Retrieved frame is empty.")
@@ -79,6 +91,11 @@ def _validate_frame(bgr: np.ndarray) -> None:
     height, width = bgr.shape[:2]
     if height <= 0 or width <= 0:
         raise CableTestError(f"Frame has invalid dimensions {width}x{height}.")
+    if width != expected_width or height != expected_height:
+        raise CableTestError(
+            f"Frame resolution {width}x{height} does not match the camera's "
+            f"reported {expected_width}x{expected_height}."
+        )
 
     std = float(bgr.std())
     mean = float(bgr.mean())
@@ -136,16 +153,48 @@ def run(output: str | None = None) -> None:
             "Capturing and validating frames for %.0fs...", _CAPTURE_DURATION_S
         )
         valid_frames = 0
+        grab_failures = 0
+        consecutive_failures = 0
+        max_consecutive_failures = 0
+        duplicate_run = 0
+        max_duplicate_run = 0
+        prev_bgr: np.ndarray | None = None
         deadline = time.monotonic() + _CAPTURE_DURATION_S
         while time.monotonic() < deadline:
-            if zed.grab() != sl.ERROR_CODE.SUCCESS:
+            grab_err = zed.grab()
+            if grab_err != sl.ERROR_CODE.SUCCESS:
+                grab_failures += 1
+                consecutive_failures += 1
+                max_consecutive_failures = max(
+                    max_consecutive_failures, consecutive_failures
+                )
+                if consecutive_failures > _MAX_CONSECUTIVE_GRAB_FAILURES:
+                    raise CableTestError(
+                        f"{consecutive_failures} consecutive grab failures "
+                        f"(last: {grab_err}); cable is dropping frames."
+                    )
                 continue
+            consecutive_failures = 0
+
             if zed.retrieve_image(image) != sl.ERROR_CODE.SUCCESS:
                 raise CableTestError("Failed to retrieve image from camera.")
 
             raw = image.get_data()  # BGRA uint8
             bgr = cv2.cvtColor(raw, cv2.COLOR_BGRA2BGR)
-            _validate_frame(bgr)
+            _validate_frame(bgr, res.width, res.height)
+
+            if prev_bgr is not None and np.array_equal(bgr, prev_bgr):
+                duplicate_run += 1
+                max_duplicate_run = max(max_duplicate_run, duplicate_run)
+                if duplicate_run >= _MAX_DUPLICATE_FRAMES:
+                    raise CableTestError(
+                        f"{duplicate_run + 1} consecutive identical frames; "
+                        "stream appears frozen rather than live."
+                    )
+            else:
+                duplicate_run = 0
+
+            prev_bgr = bgr
             last_bgr = bgr
             valid_frames += 1
 
@@ -154,8 +203,27 @@ def run(output: str | None = None) -> None:
                 f"No frames grabbed in {_CAPTURE_DURATION_S:.0f}s; "
                 "camera may be disconnected."
             )
+
+        # A healthy link delivers roughly fps * duration frames. A large shortfall
+        # signals dropped frames from a flaky cable, so require at least a fraction
+        # of the expected count.
+        expected_frames = int(fps * _CAPTURE_DURATION_S)
+        min_frames = int(expected_frames * _MIN_FRAME_FRACTION)
+        if valid_frames < min_frames:
+            raise CableTestError(
+                f"Only grabbed {valid_frames} frames in {_CAPTURE_DURATION_S:.0f}s; "
+                f"expected ~{expected_frames} ({fps}fps), at least {min_frames}. "
+                "Cable may be dropping frames."
+            )
         _logger.info(
-            "Validated %d frames over %.0fs.", valid_frames, _CAPTURE_DURATION_S
+            "Validated %d frames over %.0fs (expected ~%d); "
+            "%d grab failures (max %d in a row), max %d duplicate frames.",
+            valid_frames,
+            _CAPTURE_DURATION_S,
+            expected_frames,
+            grab_failures,
+            max_consecutive_failures,
+            max_duplicate_run,
         )
 
         if output and last_bgr is not None:
