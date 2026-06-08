@@ -48,10 +48,10 @@ _logger = logging.getLogger(__name__)
 def _default_robot_config() -> AxolRobotConfig:
     """Default Axol robot config for data collection: three ZED streams.
 
-    All three cameras share one host (``--robot_config.zed_host``); override
-    other fields from the CLI too, e.g.
-    ``--robot_config.zed_host 10.0.0.5`` or
-    ``--robot_config.axol_config.left.elbow.kp 60``.
+    All three cameras share one host, which is **required** — pass
+    ``--robot_config.zed_host 10.0.0.5`` (the empty placeholder below is
+    stripped from the config overlay so draccus enforces the input). Other
+    fields are overridable too, e.g. ``--robot_config.axol_config.left.elbow.kp 60``.
     """
     return AxolRobotConfig(
         cameras={
@@ -59,6 +59,7 @@ def _default_robot_config() -> AxolRobotConfig:
             "left_arm": ZedCameraConfig(port=30002),
             "right_arm": ZedCameraConfig(port=30004),
         },
+        zed_host="",
     )
 
 
@@ -80,7 +81,6 @@ class CollectDataConfig:
     teleop_hz: int = 120
     root: str | None = None
     push_to_hub: bool = False
-    zed_iface: str | None = None
     rerun_ip: str | None = None
     rerun_port: int = 9876
     log_level: LogLevel = "INFO"
@@ -267,7 +267,7 @@ def main(argv: list[str]) -> None:
     _run(cfg)
 
 
-def _run(cfg: CollectDataConfig) -> None:
+def _run(cfg: CollectDataConfig, stop_event: "threading.Event | None" = None) -> None:
     from pathlib import Path
 
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -282,7 +282,6 @@ def _run(cfg: CollectDataConfig) -> None:
 
     from ..lerobot.robot.robot_axol import AxolRobot
     from ..lerobot.teleop.teleop_vr import AxolVRTeleop
-    from ..shared import setup_link_ip
     from ..vr.models import VRState
 
     repo_id = cfg.repo_id
@@ -293,9 +292,6 @@ def _run(cfg: CollectDataConfig) -> None:
     push_to_hub = cfg.push_to_hub
     rerun_ip = cfg.rerun_ip
     rerun_port = cfg.rerun_port
-
-    if cfg.zed_iface:
-        setup_link_ip(cfg.zed_iface, "192.168.10.2/24")
 
     robot = AxolRobot(cfg.robot_config)
     teleop = AxolVRTeleop(cfg.teleop_config)
@@ -363,8 +359,12 @@ def _run(cfg: CollectDataConfig) -> None:
     teleop_interval = 1.0 / teleop_hz
     publisher = _SnapshotPublisher()
     capture: _CaptureThread | None = None
+
+    def _stopped() -> bool:
+        return stop_event is not None and stop_event.is_set()
+
     try:
-        while True:
+        while not _stopped():
             log_say(
                 f"Episode {episode_idx + 1}: robot is at rest pose. Press record on the VR controller when ready."
             )
@@ -373,6 +373,8 @@ def _run(cfg: CollectDataConfig) -> None:
             rerecord = False
 
             while True:
+                if _stopped():
+                    break
                 t0 = time.perf_counter()
 
                 # Camera reads happen on the capture thread; the teleop loop
@@ -414,6 +416,9 @@ def _run(cfg: CollectDataConfig) -> None:
                 capture.stop_event.set()
                 capture.join()
                 capture = None
+
+            if _stopped():
+                break
 
             log_say("Returning to rest pose.")
             teleop.request_reset()
