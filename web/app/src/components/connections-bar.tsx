@@ -33,11 +33,11 @@ function Tile({
   headerRight?: ReactNode
 }) {
   return (
-    <div className="group relative flex min-w-0 flex-1 flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+    <div className="group relative flex min-w-0 flex-1 flex-col gap-2 overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] p-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs tracking-widest text-white/40 uppercase">
+        <div className="flex min-w-0 items-center gap-2 text-xs tracking-widest text-white/40 uppercase">
           {icon}
-          <span className="font-mono">{title}</span>
+          <span className="truncate font-mono">{title}</span>
         </div>
         {headerRight}
       </div>
@@ -59,6 +59,7 @@ export function ConnectionsBar({
   host,
   hostName,
   onOpenSetup,
+  onHostDisconnect,
   robot,
   robotBusy,
   onRobotConnect,
@@ -73,6 +74,7 @@ export function ConnectionsBar({
   host: string
   hostName?: string
   onOpenSetup: () => void
+  onHostDisconnect: () => void
   robot: RobotStatus | null
   robotBusy: boolean
   onRobotConnect: () => void
@@ -85,10 +87,17 @@ export function ConnectionsBar({
 }) {
   const online = conn === "ok"
 
-  // -- workstation --
-  const wsDot: Dot = conn === "ok" ? "ok" : conn === "err" ? "err" : "warn"
+  // -- axol host --
+  const wsDot: Dot =
+    conn === "ok" ? "ok" : conn === "err" ? "err" : conn === "idle" ? "idle" : "warn"
   const wsLabel =
-    conn === "ok" ? hostName || host || "Connected" : conn === "err" ? "Offline" : "Connecting…"
+    conn === "ok"
+      ? hostName || host || "Connected"
+      : conn === "err"
+        ? "Offline"
+        : conn === "idle"
+          ? "Not connected"
+          : "Connecting…"
 
   // -- robot --
   const rs = robot?.state ?? "disconnected"
@@ -125,18 +134,30 @@ export function ConnectionsBar({
       : "Not connected"
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
       <Tile
         icon={<Server className="size-3.5" />}
-        title="Workstation"
+        title="Axol Host"
         dot={wsDot}
         label={wsLabel}
         pulse={conn === "loading"}
       >
-        <Button variant="outline" size="sm" onClick={onOpenSetup}>
-          <Plug />
-          Setup
-        </Button>
+        {online ? (
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onHostDisconnect}
+            aria-label="Disconnect Axol Host"
+            className="size-8"
+          >
+            <Power />
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" onClick={onOpenSetup}>
+            <Plug />
+            Connect
+          </Button>
+        )}
       </Tile>
 
       <Tile
@@ -152,16 +173,22 @@ export function ConnectionsBar({
         {rs === "connected" || rs === "busy" ? (
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={onRobotDisconnect}
             disabled={robotBusy || rs === "busy"}
+            aria-label="Disconnect Axol"
+            className="size-8"
           >
             <Power />
-            Disconnect
           </Button>
         ) : (
-          <Button size="sm" onClick={onRobotConnect} disabled={!online || robotBusy}>
-            {rs === "connecting" || robotBusy ? <Loader2 className="animate-spin" /> : <Power />}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRobotConnect}
+            disabled={!online || robotBusy}
+          >
+            {rs === "connecting" || robotBusy ? <Loader2 className="animate-spin" /> : <Plug />}
             Connect
           </Button>
         )}
@@ -182,22 +209,26 @@ export function ConnectionsBar({
         }
       >
         {zedConnected ? (
-          <div className="relative flex items-center">
-            {/* Restart stays out of the layout (and off the hostname) until hover. */}
+          <div className="flex items-center gap-1.5">
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={onZedRestart}
               disabled={zedBusy}
-              title="Restart PTP clock sync and camera streams"
-              className="pointer-events-none absolute right-full mr-1.5 opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+              aria-label="Restart PTP clock sync and camera streams"
+              className="size-8"
             >
               {zedBusy ? <Loader2 className="animate-spin" /> : <RotateCw />}
-              Restart
             </Button>
-            <Button variant="outline" size="sm" onClick={onZedDisconnect} disabled={zedBusy}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onZedDisconnect}
+              disabled={zedBusy}
+              aria-label="Disconnect the ZED box"
+              className="size-8"
+            >
               <Power />
-              Disconnect
             </Button>
           </div>
         ) : (
@@ -212,26 +243,13 @@ export function ConnectionsBar({
 }
 
 /**
- * A labelled status light: tiny dot, no text (the label is the hover tooltip),
- * so the ZED box header stays compact and never crowds the title.
+ * A labelled status light: short name + tiny dot, so the ZED box header stays
+ * compact and never crowds the title.
  * Green = good, amber (pulsing) = loading/starting, red = error.
  */
-function StatusDot({
-  name,
-  dot,
-  label,
-  pulse,
-}: {
-  name: string
-  dot: Dot
-  label: string
-  pulse?: boolean
-}) {
+function StatusDot({ name, dot, pulse }: { name: string; dot: Dot; pulse?: boolean }) {
   return (
-    <span
-      className="flex items-center gap-1.5 text-[0.6rem] tracking-wide text-white/35 uppercase"
-      title={label}
-    >
+    <span className="flex items-center gap-1.5 text-[0.6rem] tracking-wide text-white/35 uppercase">
       <span>{name}</span>
       <span className={cn("size-2 rounded-full", DOT_CLASS[dot], pulse && "animate-pulse")} />
     </span>
@@ -244,14 +262,14 @@ function StatusDot({
  */
 function PtpBadge({ ptp }: { ptp?: PtpStatus }) {
   if (!ptp) return null
-  const [dot, label, pulse] = ptp.locked
-    ? (["ok", "Clock locked", false] as const)
+  const [dot, pulse] = ptp.locked
+    ? (["ok", false] as const)
     : ptp.needsSudo
-      ? (["warn", "Clock sync needs sudo", true] as const)
+      ? (["warn", true] as const)
       : ptp.error
-        ? (["err", ptp.error || "Clock sync error", false] as const)
-        : (["warn", "Syncing clocks…", true] as const)
-  return <StatusDot name="clock" dot={dot} label={label} pulse={pulse} />
+        ? (["err", false] as const)
+        : (["warn", true] as const)
+  return <StatusDot name="clock" dot={dot} pulse={pulse} />
 }
 
 /**
@@ -262,12 +280,12 @@ function PtpBadge({ ptp }: { ptp?: PtpStatus }) {
 function StreamBadge({ stream }: { stream?: StreamStatus }) {
   if (!stream) return null
   if (!stream.streaming && stream.cameras.length === 0 && !stream.error) return null
-  const [dot, label, pulse] = stream.ready
-    ? (["ok", "Cameras live", false] as const)
+  const [dot, pulse] = stream.ready
+    ? (["ok", false] as const)
     : stream.error
-      ? (["err", stream.error || "Stream error", false] as const)
-      : (["warn", "Starting cameras…", true] as const)
-  return <StatusDot name="stream" dot={dot} label={label} pulse={pulse} />
+      ? (["err", false] as const)
+      : (["warn", true] as const)
+  return <StatusDot name="stream" dot={dot} pulse={pulse} />
 }
 
 /**
@@ -279,7 +297,7 @@ export function MotorGrid({ robot }: { robot: RobotStatus }) {
   if (!robot.motors.length) return null
   const arms = ["left", "right"]
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
       {arms.map((arm) => (
         <div key={arm} className="flex items-center gap-1">
           <span className="font-mono text-[0.6rem] text-white/35">{arm[0].toUpperCase()}</span>
@@ -289,7 +307,6 @@ export function MotorGrid({ robot }: { robot: RobotStatus }) {
               .map((m) => (
                 <span
                   key={m.joint}
-                  title={`${m.joint}${m.status ? ` — ${m.status}` : ""}`}
                   className={cn(
                     "size-2 rounded-[2px]",
                     m.reachable ? "bg-emerald-400/80" : "bg-red-400/60"

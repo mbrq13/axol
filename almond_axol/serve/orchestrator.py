@@ -34,19 +34,19 @@ import urllib.request
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
-from ..sudo import (
+from ..utils.sudo import (
     SUDO_BAD_PASSWORD_CODE as _SUDO_BAD_PASSWORD_CODE,
 )
-from ..sudo import (
+from ..utils.sudo import (
     SUDO_BAD_PASSWORD_MARKER as _SUDO_BAD_PASSWORD_MARKER,
 )
-from ..sudo import (
+from ..utils.sudo import (
     SUDO_PASSWORD_ENV as _SUDO_PASSWORD_ENV,
 )
-from ..sudo import (
+from ..utils.sudo import (
     SUDO_REQUIRED_CODE as _SUDO_REQUIRED_CODE,
 )
-from ..sudo import (
+from ..utils.sudo import (
     SUDO_REQUIRED_MARKER as _SUDO_REQUIRED_MARKER,
 )
 from .commands import build_argv
@@ -96,7 +96,7 @@ def box_ssl_context() -> ssl.SSLContext:
 
 
 def _normalize_url(url: str) -> str:
-    """Normalize a box address to ``https://host:8090`` form (defaults applied).
+    """Normalize a box address to ``https://host:8001`` form (defaults applied).
 
     A bare IP defaults to ``https`` since ``axol serve`` is TLS by default; an
     explicit ``http://`` is preserved for boxes started with ``--no-tls``.
@@ -110,7 +110,7 @@ def _normalize_url(url: str) -> str:
         url = f"https://{url}"
     parts = urlsplit(url)
     if parts.port is None and parts.hostname:
-        url = f"{parts.scheme}://{parts.hostname}:8090"
+        url = f"{parts.scheme}://{parts.hostname}:8001"
     return url
 
 
