@@ -76,11 +76,19 @@ class ZedConnectRequest(BaseModel):
     ``cameras`` (optional) maps camera slot (``overhead`` / ``left_arm`` /
     ``right_arm``) to its ZED-X One serial. When any are given, streaming for
     those cameras starts once the clocks lock.
+
+    ``overhead_stereo`` (optional) marks the overhead camera as a stereo ZED X
+    so the box streams both eyes.
+
+    ``resolution`` (optional) sets the capture resolution for all cameras
+    (``SVGA`` / ``HD1080`` / ``HD1200``); ``None`` keeps the sender default.
     """
 
     url: str
     password: str | None = None
     cameras: dict[str, str] | None = None
+    overhead_stereo: bool = False
+    resolution: str | None = None
 
 
 class SyncClocksRequest(BaseModel):
@@ -109,6 +117,7 @@ class StreamRequest(BaseModel):
     resolution: str | None = None
     fps: int | None = None
     bitrate: int | None = None
+    overhead_stereo: bool = False
 
 
 # Ports the launched commands expose on the serve host.
@@ -177,6 +186,8 @@ def create_app(static_dir: Path | None = None) -> FastAPI:
         "boxUrl": None,
         "info": None,
         "error": None,
+        "overheadStereo": False,
+        "resolution": None,
         "ptp": ptp.status(),
         "stream": stream.status(),
     }
@@ -296,6 +307,8 @@ def create_app(static_dir: Path | None = None) -> FastAPI:
     async def zed_connect(req: ZedConnectRequest) -> JSONResponse:
         ok, data = await asyncio.to_thread(_fetch_box_info, req.url)
         zed_state["boxUrl"] = _normalize_box_url(req.url)
+        zed_state["overheadStereo"] = req.overhead_stereo
+        zed_state["resolution"] = req.resolution
         _stop_zed_monitor()
         if ok:
             zed_state["connected"] = True
@@ -306,7 +319,12 @@ def create_app(static_dir: Path | None = None) -> FastAPI:
             zed_state["ptp"] = await ptp.start(req.url, req.password)
             # If camera serials were given, start streaming them too (it waits
             # for the clocks to lock first); a task then reuses the live feeds.
-            zed_state["stream"] = await stream.start(req.url, req.cameras or {})
+            zed_state["stream"] = await stream.start(
+                req.url,
+                req.cameras or {},
+                options={"resolution": req.resolution},
+                overhead_stereo=req.overhead_stereo,
+            )
             # Heartbeat the box so the link drops if it goes away.
             zed_monitor["task"] = asyncio.create_task(_zed_monitor(req.url))
             return JSONResponse(zed_state)
@@ -330,6 +348,8 @@ def create_app(static_dir: Path | None = None) -> FastAPI:
                 "boxUrl": None,
                 "info": None,
                 "error": None,
+                "overheadStereo": False,
+                "resolution": None,
                 "ptp": ptp.status(),
                 "stream": stream.status(),
             }
@@ -457,6 +477,8 @@ def create_app(static_dir: Path | None = None) -> FastAPI:
             argv += ["--fps", str(req.fps)]
         if req.bitrate is not None:
             argv += ["--bitrate", str(req.bitrate)]
+        if req.overhead_stereo:
+            argv += ["--overhead-stereo"]
         session = await manager.start_raw("zed.stream", argv)
         return JSONResponse(session.to_dict())
 

@@ -26,6 +26,11 @@ def add_parser(subparsers) -> None:  # type: ignore[type-arg]
         help="Serial number of the overhead camera.",
     )
     p.add_argument(
+        "--overhead-stereo",
+        action="store_true",
+        help="Treat the overhead camera as a stereo ZED X (streams both eyes).",
+    )
+    p.add_argument(
         "--left-arm",
         type=int,
         default=None,
@@ -55,9 +60,9 @@ def add_parser(subparsers) -> None:  # type: ignore[type-arg]
     p.add_argument(
         "--bitrate",
         type=int,
-        default=8000,
+        default=None,
         metavar="KBPS",
-        help="HEVC encoding bitrate in kbits/s (default: 8000).",
+        help="HEVC encoding bitrate in kbits/s (default: auto from resolution).",
     )
     p.add_argument(
         "--log-level",
@@ -84,6 +89,7 @@ def run(args: argparse.Namespace) -> None:
                 args.resolution,
                 args.fps,
                 args.bitrate,
+                args.overhead_stereo,
             )
         )
     except KeyboardInterrupt:
@@ -96,7 +102,8 @@ async def _run(
     right_arm: int | None,
     resolution: str,
     fps: int,
-    bitrate: int,
+    bitrate: int | None,
+    overhead_stereo: bool = False,
 ) -> None:
     import pyzed.sl as sl
 
@@ -109,6 +116,7 @@ async def _run(
         resolution=getattr(sl.RESOLUTION, resolution),
         fps=fps,
         bitrate=bitrate,
+        overhead_stereo=overhead_stereo,
     )
     async with ZedStreamer(config):
         await asyncio.sleep(float("inf"))

@@ -190,6 +190,8 @@ export interface ZedLinkStatus {
   boxUrl: string | null
   info: ServerInfo | null
   error: string | null
+  overheadStereo?: boolean
+  resolution?: string | null
   ptp?: PtpStatus
   stream?: StreamStatus
 }
@@ -201,11 +203,21 @@ export async function fetchZedStatus(): Promise<ZedLinkStatus> {
 export async function zedConnect(
   url: string,
   password?: string,
-  cameras?: ZedSpec["cameras"]
+  cameras?: ZedSpec["cameras"],
+  overheadStereo?: boolean,
+  resolution?: string
 ): Promise<ZedLinkStatus> {
-  const body: { url: string; password?: string; cameras?: ZedSpec["cameras"] } = { url }
+  const body: {
+    url: string
+    password?: string
+    cameras?: ZedSpec["cameras"]
+    overhead_stereo?: boolean
+    resolution?: string
+  } = { url }
   if (password) body.password = password
   if (cameras) body.cameras = cameras
+  if (overheadStereo) body.overhead_stereo = overheadStereo
+  if (resolution) body.resolution = resolution
   return json(
     await fetch(apiUrl("/api/zed/connect"), {
       method: "POST",
@@ -274,6 +286,8 @@ export interface ZedSpec {
   enabled: boolean
   boxUrl: string
   cameras: { overhead: string; left_arm: string; right_arm: string }
+  /** Treat the overhead as a stereo ZED X (both eyes on one stream). */
+  overheadStereo?: boolean
   resolution?: string
   fps?: number
   bitrate?: number

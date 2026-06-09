@@ -63,6 +63,37 @@ def _default_robot_config() -> AxolRobotConfig:
     )
 
 
+def _register_camera_video(robot: "AxolRobot", teleop: Any) -> None:
+    """Register the ZED cameras as WebRTC video sources for the headset.
+
+    Relays every camera the robot exposes (overhead — or ``overhead_left`` /
+    ``overhead_right`` when stereo — plus both wrist cameras) so the headset can
+    show them. Best-effort: reads the latest decoded frame each camera already
+    keeps, so it never blocks the capture pipeline.
+    """
+
+    def _make_source(cam: Any) -> Callable[[], Any]:
+        def _source() -> Any:
+            try:
+                return cam.read_latest(max_age_ms=1000)
+            except Exception:
+                return None
+
+        return _source
+
+    sources: dict[str, Callable[[], Any]] = {
+        name: _make_source(cam) for name, cam in robot.cameras.items()
+    }
+
+    if not sources:
+        return
+
+    try:
+        teleop.set_video_sources(sources)
+    except Exception as exc:
+        _logger.warning("failed to enable camera video: %s", exc)
+
+
 @dataclass
 class CollectDataConfig:
     """Config for ``axol collect-data``.
@@ -352,6 +383,11 @@ def _run(cfg: CollectDataConfig, stop_event: "threading.Event | None" = None) ->
         )
     pos_l, pos_r = robot.positions
     teleop.connect(q_start_left=pos_l, q_start_right=pos_r)
+
+    # Relay the overhead + wrist cameras to the headset so the operator can see
+    # the scene and grippers. Best-effort: reuses the frames ZedCamera decodes.
+    _register_camera_video(robot, teleop)
+
     teleop_action_proc, robot_action_proc, robot_obs_proc = make_default_processors()
 
     episodes_recorded = 0

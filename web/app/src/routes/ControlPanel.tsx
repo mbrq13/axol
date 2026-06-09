@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import {
   OPERATIONS,
@@ -65,6 +65,8 @@ const DEFAULT_ZED: ZedSpec = {
   enabled: false,
   boxUrl: "",
   cameras: { overhead: "", left_arm: "", right_arm: "" },
+  overheadStereo: false,
+  resolution: "SVGA",
 }
 
 function loadZed(): ZedSpec {
@@ -195,6 +197,24 @@ export default function ControlPanel() {
     }
   }, [conn.state])
 
+  // Auto-connect Axol once after the host comes online, if it's sitting idle.
+  // The ref makes it fire at most once per host session, so a manual robot
+  // disconnect afterwards isn't immediately undone.
+  const autoRobotRef = useRef(false)
+  useEffect(() => {
+    if (conn.state !== "ok") {
+      autoRobotRef.current = false
+      return
+    }
+    if (autoRobotRef.current || !robot) return
+    autoRobotRef.current = true
+    if (robot.state === "disconnected" && !robotBusy) {
+      robotConnectClick()
+    }
+    // robotConnectClick is stable enough (only uses state setters / fetch).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conn.state, robot, robotBusy])
+
   function hostDisconnectClick() {
     // Client-side disconnect: stop pointing the panel at the host. Any running
     // op keeps going server-side; reconnecting via Connect refetches its state.
@@ -203,6 +223,7 @@ export default function ControlPanel() {
     setRobot(null)
     setZedLink(null)
     setSession(null)
+    autoRobotRef.current = false
   }
 
   function updateServerHost(value: string) {
@@ -297,12 +318,15 @@ export default function ControlPanel() {
   }
 
   async function zedDisconnectClick() {
+    setZedBusy(true)
     try {
       setZedLink(await zedDisconnect())
       setZedSudoOpen(false)
       setZedSudoDismissed(false)
     } catch (e) {
       setError(String(e))
+    } finally {
+      setZedBusy(false)
     }
   }
 
@@ -314,7 +338,13 @@ export default function ControlPanel() {
     setZedBusy(true)
     setError(null)
     try {
-      const next = await zedConnect(url, undefined, zedSettings.cameras)
+      const next = await zedConnect(
+        url,
+        undefined,
+        zedSettings.cameras,
+        zedSettings.overheadStereo,
+        zedSettings.resolution
+      )
       setZedLink(next)
       setZedSudoDismissed(false)
     } catch (e) {
@@ -340,7 +370,13 @@ export default function ControlPanel() {
   async function zedSudoSubmit(password: string) {
     setZedSudoBusy(true)
     try {
-      const next = await zedConnect(zedLink?.boxUrl ?? "", password, zedSettings.cameras)
+      const next = await zedConnect(
+        zedLink?.boxUrl ?? "",
+        password,
+        zedSettings.cameras,
+        zedSettings.overheadStereo,
+        zedSettings.resolution
+      )
       setZedLink(next)
       // ptp4l validates the password asynchronously; close optimistically and
       // let polling reopen this with an error if the password was wrong.
@@ -480,11 +516,13 @@ export default function ControlPanel() {
         initial={zedLink}
         defaultUrl={zedSettings.boxUrl}
         defaultCameras={zedSettings.cameras}
-        onConnected={(status, url, cameras) => {
+        defaultOverheadStereo={zedSettings.overheadStereo}
+        defaultResolution={zedSettings.resolution}
+        onConnected={(status, url, cameras, overheadStereo, resolution) => {
           setZedLink(status)
-          // Remember the box address + camera serials (as typed) so they
-          // survive a server restart / browser reopen, like the Axol Host Address.
-          patchZed({ boxUrl: url, cameras })
+          // Remember the box address + camera serials (as typed) + stereo flag
+          // + resolution so they survive a server restart / browser reopen.
+          patchZed({ boxUrl: url, cameras, overheadStereo, resolution })
           setZedSudoDismissed(false)
         }}
       />
