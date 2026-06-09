@@ -18,7 +18,19 @@ The full documentation is hosted at [docs.almond.bot](https://docs.almond.bot). 
 
 ## Installation
 
-Install the package using [`uv`](https://docs.astral.sh/uv/). `pyroki` and `lerobot` are sourced from Git and are resolved automatically:
+### Quick install (recommended)
+
+One command installs `uv`, the `axol` CLI (from GitHub, with every extra except `cuda`/`dev`), and a root systemd service that keeps `axol serve` running at boot:
+
+```bash
+curl https://axol.almond.bot/install -fsS | bash
+```
+
+Then open [axol.almond.bot](https://axol.almond.bot) and connect to the machine. The install keeps itself in sync with `main`: when the control panel connects, the server upgrades in the background and restarts onto the new version once idle.
+
+### Development install
+
+Install the package from a clone using [`uv`](https://docs.astral.sh/uv/). `pyroki` and `lerobot` are sourced from Git and are resolved automatically:
 
 ```bash
 uv sync
@@ -93,6 +105,7 @@ See the [installation guide](https://docs.almond.bot/installation) for the full 
 - [`serve`](https://docs.almond.bot/cli/serve) — web control panel + API server
 - [`can.setup`](https://docs.almond.bot/cli/can-setup)
 - [`can.enable`](https://docs.almond.bot/cli/can-enable)
+- [`can.driver`](https://docs.almond.bot/cli/can-driver)
 - [`motor.info`](https://docs.almond.bot/cli/motor-info)
 - [`motor.set-can-id`](https://docs.almond.bot/cli/motor-set-can-id)
 - [`motor.set-zero-pos`](https://docs.almond.bot/cli/motor-set-zero-pos)
