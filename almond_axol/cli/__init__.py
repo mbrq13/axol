@@ -10,6 +10,7 @@ from .can import enable as can_enable
 from .can import setup as can_setup
 from .motor import info as motor_info
 from .motor import set_can_id, set_zero_pos
+from . import pico_bridge
 from .tune import friction, pid, repeatability
 from .zed import install as zed_install
 from .zed import stream as zed_stream
@@ -54,6 +55,7 @@ def main() -> None:
     zed_stream.add_parser(subparsers)
     zed_sync_clocks.add_parser(subparsers)
     zed_install.add_parser(subparsers)
+    pico_bridge.add_parser(subparsers)
     pid.add_parser(subparsers)
     friction.add_parser(subparsers)
     repeatability.add_parser(subparsers)
